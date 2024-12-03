@@ -46,3 +46,4 @@ async def add_tech_stack(tech_stack: TechStackCreate, db: AsyncSession = Depends
     await db.commit()
 
     return TechStackResponse(message="Новый стек успешно добавлен.")
+

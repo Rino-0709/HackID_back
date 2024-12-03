@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
 from app.database import get_db
 from app.models.forbidden_word import ForbiddenWord
-from app.schemas.forbidden_word import ForbiddenWordCreate, ForbiddenWordResponse
+from app.schemas.forbidden_word import ForbiddenWordCreate, ForbiddenWordResponse, ForbiddenWordGetResponse
 
 router = APIRouter()
 
@@ -32,3 +32,13 @@ async def add_forbidden_word(forbidden_word: ForbiddenWordCreate, db: AsyncSessi
         raise HTTPException(status_code=400, detail=f"Ошибка при добавлении слова: {str(e)}")
 
     return ForbiddenWordResponse(message="Слово добавлено в список запрещённых.")
+
+@router.get("/forbidden-word", response_model=list[ForbiddenWordGetResponse])
+async def get_forbidden_words(db: AsyncSession = Depends(get_db)):
+    # Запрос к базе данных для получения всех слов
+    result = await db.execute(text("SELECT id_word AS id, word FROM forbidden_words"))
+    forbidden_words = result.fetchall()
+    
+    # Форматирование данных
+    response = [{"id": row.id, "word": row.word} for row in forbidden_words]
+    return response

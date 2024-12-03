@@ -30,3 +30,22 @@ class HackathonResponse(BaseModel):
 
     class Config:
         orm_mode = True  # Позволяет работать с SQLAlchemy моделями
+
+class QuestionnaireResponse(BaseModel):
+    team_name: str
+
+    class Config:
+        orm_mode = True  # Позволяет работать с SQLAlchemy моделями
+
+class TeamMemberResponse(BaseModel):
+    telegram_tag: str
+    first_name: str
+    last_name: str
+    group: str
+    team_name: str
+    captain_tag: str
+    role_in_team: str
+    technology_stack: List[str]
+
+    class Config:
+        orm_mode = True  # Позволяет работать с SQLAlchemy моделями

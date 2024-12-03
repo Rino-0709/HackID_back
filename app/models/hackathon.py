@@ -18,3 +18,4 @@ class Hackathon(Base):
     hackathon_name = Column(String, nullable=False)
     host_hackathon = Column(String, nullable=False)
     activity_status = Column(Integer, nullable=False)
+

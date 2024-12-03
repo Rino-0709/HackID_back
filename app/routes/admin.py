@@ -10,6 +10,11 @@ from app.schemas.hackathon import ActiveHackathonCreate, ActiveHackathonResponse
 from app.models.forbidden_word import ForbiddenWord, ForbiddenWordDeleteRequest
 from app.models.user import RegisteredUser
 from app.schemas.forbidden_word import ForbiddenWordCreate, ForbiddenWordResponse, ForbiddenWordGetResponse
+from app.models.hackathon import SubmittedQuestionnaire
+from app.models.stack import TechStack  
+from app.schemas.hackathon import QuestionnaireResponse  # Схема ответа
+from app.schemas.hackathon import TeamMemberResponse
+from app.models.user import RegisteredUser  # Модель для пользователей
 
 router = APIRouter()
 
@@ -128,3 +133,97 @@ async def change_hackathon_status(hackathon_id: int, db: AsyncSession = Depends(
         raise HTTPException(status_code=400, detail="Ошибка при изменении статуса хакатона")
 
     return MessageResponse(message="Статус хакатона успешно изменён")
+
+@router.post("/hackathons/get-questionnaires", response_model=list[QuestionnaireResponse])
+async def get_questionnaires(hackathon_id: int, db: AsyncSession = Depends(get_db)):
+    # Выполняем запрос для получения всех заявок с указанным hackathon_id
+    result = await db.execute(select(SubmittedQuestionnaire).filter(SubmittedQuestionnaire.hackathon_id == hackathon_id))
+    questionnaires = result.scalars().all()
+
+    if not questionnaires:
+        raise HTTPException(status_code=404, detail="Заявки не найдены для указанного хакатона")
+
+    # Формируем список с полем team_name
+    team_names = [{"team_name": questionnaire.team_name} for questionnaire in questionnaires]
+    
+    return team_names
+
+@router.post("/hackathons/read-questionnaires")
+async def read_questionnaires(hackathon_id: int, team_name: str, db: AsyncSession = Depends(get_db)):
+    try:
+        # Основной SQL-запрос
+        query = text("""
+            SELECT 
+                sq.hackathon_id, 
+                sq.id_telegram AS sq_id_telegram,
+                sq.captain_tag, 
+                sq.participant_role, 
+                sq.stack_list, 
+                sq.team_name, 
+                ru.id_telegram AS ru_id_telegram, 
+                ru.first_name, 
+                ru.last_name, 
+                ru.study_group, 
+                ru.tag_telegram, 
+                ru.role
+            FROM 
+                submitted_questionnaires sq 
+            JOIN 
+                registered_users ru 
+            ON 
+                sq.id_telegram = ru.id_telegram
+            WHERE 
+                sq.hackathon_id = :hackathon_id 
+            AND 
+                sq.team_name = :team_name;
+        """)
+
+        # Выполнение SQL-запроса
+        result = await db.execute(query, {"hackathon_id": hackathon_id, "team_name": team_name})
+        questionnaires = result.fetchall()
+
+        # Логирование результатов
+        print("Fetched Questionnaires:", questionnaires)
+
+        if not questionnaires:
+            return {"message": "No matching questionnaires found"}
+
+        # Получение уникальных stack_ids
+        stack_ids = set()
+        for q in questionnaires:
+            if q.stack_list:
+                stack_ids.update(q.stack_list)
+
+        # Получение названий технологий
+        stack_names_map = {}
+        if stack_ids:
+            stack_query = text("""
+                SELECT technology_id, technology_name 
+                FROM stack_table 
+                WHERE technology_id = ANY(:stack_ids)
+            """)
+            stack_result = await db.execute(stack_query, {"stack_ids": list(stack_ids)})
+            stack_names_map = {row.technology_id: row.technology_name for row in stack_result.fetchall()}
+
+        # Формирование ответа
+        response = []
+        for q in questionnaires:
+            stack_names = [stack_names_map.get(stack_id, "Unknown") for stack_id in q.stack_list]
+
+            response.append({
+                "telegram_tag": q.tag_telegram,
+                "first_name": q.first_name,
+                "last_name": q.last_name,
+                "group": q.study_group,
+                "team_name": q.team_name,
+                "captain_tag": q.captain_tag,
+                "role_in_team": q.participant_role,
+                "technology_stack": stack_names
+            })
+
+        return response
+
+    except Exception as e:
+        # Логирование ошибок
+        print("Error occurred:", str(e))
+        raise HTTPException(status_code=500, detail="Internal Server Error")    

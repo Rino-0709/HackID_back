@@ -15,6 +15,7 @@ async def update_profile(
 ):
     # Генерируем заглушки для id_telegram, tag_telegram, role
     id_telegram = random.randint(1000, 9999)
+    #id_telegram = 7870
     tag_telegram = "@username"+str(id_telegram)
     role = 1
 

@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.future import select
 from sqlalchemy import text
 from app.database import get_db
 from app.models.forbidden_word import ForbiddenWord, ForbiddenWordDeleteRequest
+from app.models.user import RegisteredUser
 from app.schemas.forbidden_word import ForbiddenWordCreate, ForbiddenWordResponse, ForbiddenWordGetResponse
 
 router = APIRouter()
@@ -65,3 +67,16 @@ async def delete_forbidden_word(request: ForbiddenWordDeleteRequest, db: AsyncSe
     # Подтвердить изменения
     await db.commit()
     return {"message": "Запрещённое слово удалено"}
+
+@router.get("/users")
+async def get_users(db: AsyncSession = Depends(get_db)):
+    # Получаем все пользователи из таблицы
+    result = await db.execute(
+        text("SELECT id_telegram, tag_telegram FROM registered_users")
+    )
+    users = result.fetchall()
+    
+    # Формируем список пользователей
+    users_list = [{"user_id": user.id_telegram, "telegram_tag": user.tag_telegram} for user in users]
+    
+    return users_list

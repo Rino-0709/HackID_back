@@ -4,6 +4,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
 from sqlalchemy import text
 from app.database import get_db
+from app.schemas.hackathon import MessageResponse
+from app.models.hackathon import Hackathon
+from app.schemas.hackathon import ActiveHackathonCreate, ActiveHackathonResponse
 from app.models.forbidden_word import ForbiddenWord, ForbiddenWordDeleteRequest
 from app.models.user import RegisteredUser
 from app.schemas.forbidden_word import ForbiddenWordCreate, ForbiddenWordResponse, ForbiddenWordGetResponse
@@ -80,3 +83,48 @@ async def get_users(db: AsyncSession = Depends(get_db)):
     users_list = [{"user_id": user.id_telegram, "telegram_tag": user.tag_telegram} for user in users]
     
     return users_list
+
+@router.post("/hackathons/add", response_model=ActiveHackathonResponse)
+async def add_hackathon(
+    hackathon: ActiveHackathonCreate, db: AsyncSession = Depends(get_db)
+):
+    # Проверка, чтобы хакатон с таким же названием не существовал
+    existing_hackathon = await db.execute(
+        select(Hackathon).filter(Hackathon.hackathon_name == hackathon.hackathon_name)
+    )
+    existing_hackathon = existing_hackathon.scalars().first()
+    if existing_hackathon:
+        raise HTTPException(status_code=400, detail="Хакатон с таким названием уже существует.")
+
+    # Добавление нового хакатона в базу данных без генерации ID
+    new_hackathon = Hackathon(
+        hackathon_name=hackathon.hackathon_name,
+        host_hackathon=hackathon.host_hackathon,
+        activity_status=hackathon.activity_status
+    )
+    db.add(new_hackathon)
+    await db.commit()
+
+    return ActiveHackathonResponse(message="Хакатон успешно добавлен")
+
+@router.post("/change-status", response_model=MessageResponse)
+async def change_hackathon_status(hackathon_id: int, db: AsyncSession = Depends(get_db)):
+    # Получаем хакатон по ID
+    result = await db.execute(select(Hackathon).filter(Hackathon.hackathon_id == hackathon_id))
+    hackathon = result.scalars().first()
+
+    # Если хакатон не найден, возвращаем ошибку
+    if not hackathon:
+        raise HTTPException(status_code=404, detail="Хакатон не найден")
+
+    # Меняем статус на противоположный
+    hackathon.activity_status = 1 if hackathon.activity_status == 0 else 0
+
+    # Применяем изменения
+    try:
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Ошибка при изменении статуса хакатона")
+
+    return MessageResponse(message="Статус хакатона успешно изменён")

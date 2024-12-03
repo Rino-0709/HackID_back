@@ -2,26 +2,23 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from app.database import get_db
+from sqlalchemy.future import select
 from app.models.hackathon import SubmittedQuestionnaire
-from app.schemas.hackathon import HackathonRegister, HackathonRegisterResponse
+from app.models.hackathon import Hackathon
+from app.schemas.hackathon import HackathonRegister, HackathonRegisterResponse, HackathonResponse
 import random
 
 router = APIRouter()
 
-@router.get("/")
-async def get_hackathons():
-    hackathons = [
-        {"id": 1, "name": "Hackathon 1", "host": "Москва", "status": 1},
-        {"id": 2, "name": "Hackathon 2", "host": "онлайн", "status": 0},
-        {"id": 3, "name": "Hackathon 3", "host": "Санкт-Петербург", "status": 1},
-        {"id": 4, "name": "Hackathon 4", "host": "Екатеринбург", "status": 0},
-        {"id": 5, "name": "Hackathon 5", "host": "Новосибирск", "status": 1},
-        {"id": 6, "name": "Hackathon 6", "host": "онлайн", "status": 1},
-        {"id": 7, "name": "Hackathon 7", "host": "Казань", "status": 0},
-        {"id": 8, "name": "Hackathon 8", "host": "Красноярск", "status": 1},
-        {"id": 9, "name": "Hackathon 9", "host": "Нижний Новгород", "status": 0},
-        {"id": 10, "name": "Hackathon 10", "host": "онлайн", "status": 1},
-    ]
+@router.get("/", response_model=list[HackathonResponse])
+async def get_hackathons(db: AsyncSession = Depends(get_db)):
+    # Выполняем запрос для получения всех хакатонов из таблицы active_hackathons
+    result = await db.execute(select(Hackathon))
+    hackathons = result.scalars().all()
+
+    if not hackathons:
+        raise HTTPException(status_code=404, detail="Хакатоны не найдены")
+
     return hackathons
 
 

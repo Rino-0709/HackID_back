@@ -10,3 +10,23 @@ class HackathonRegister(BaseModel):
 
 class HackathonRegisterResponse(BaseModel):
     message: str
+
+class MessageResponse(BaseModel):
+    message: str
+
+class ActiveHackathonCreate(BaseModel):
+    hackathon_name: str
+    host_hackathon: str
+    activity_status: int
+
+class ActiveHackathonResponse(BaseModel):
+    message: str
+
+class HackathonResponse(BaseModel):
+    hackathon_id: int
+    hackathon_name: str
+    host_hackathon: str
+    activity_status: int
+
+    class Config:
+        orm_mode = True  # Позволяет работать с SQLAlchemy моделями

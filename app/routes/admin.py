@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
 from app.database import get_db
-from app.models.forbidden_word import ForbiddenWord
+from app.models.forbidden_word import ForbiddenWord, ForbiddenWordDeleteRequest
 from app.schemas.forbidden_word import ForbiddenWordCreate, ForbiddenWordResponse, ForbiddenWordGetResponse
 
 router = APIRouter()
@@ -31,7 +31,16 @@ async def add_forbidden_word(forbidden_word: ForbiddenWordCreate, db: AsyncSessi
         print(f"Добавляемое слово: {word}")
         raise HTTPException(status_code=400, detail=f"Ошибка при добавлении слова: {str(e)}")
 
-    return ForbiddenWordResponse(message="Слово добавлено в список запрещённых.")
+    # Удаление стека из stack_table, если в названии содержится запрещённое слово
+    try:
+        delete_query = text("DELETE FROM stack_table WHERE LOWER(technology_name) LIKE :word")
+        await db.execute(delete_query, {"word": f"%{word}%"})
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=f"Ошибка при удалении стека: {str(e)}")
+
+    return ForbiddenWordResponse(message="Слово добавлено в список запрещённых и стеки с этим словом удалены.")
 
 @router.get("/forbidden-word", response_model=list[ForbiddenWordGetResponse])
 async def get_forbidden_words(db: AsyncSession = Depends(get_db)):
@@ -42,3 +51,17 @@ async def get_forbidden_words(db: AsyncSession = Depends(get_db)):
     # Форматирование данных
     response = [{"id": row.id, "word": row.word} for row in forbidden_words]
     return response
+
+@router.post("/forbidden-words/delete", response_model=dict)
+async def delete_forbidden_word(request: ForbiddenWordDeleteRequest, db: AsyncSession = Depends(get_db)):
+    # Удаление слова из таблицы
+    result = await db.execute(text("DELETE FROM forbidden_words WHERE word = :word RETURNING id_word"), {"word": request.word})
+    deleted_row = result.fetchone()
+
+    # Если слово не найдено
+    if not deleted_row:
+        raise HTTPException(status_code=404, detail="Слово не найдено в списке запрещённых.")
+
+    # Подтвердить изменения
+    await db.commit()
+    return {"message": "Запрещённое слово удалено"}
